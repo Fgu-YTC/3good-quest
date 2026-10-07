@@ -17,7 +17,7 @@ const display = ZCOOL_XiaoWei({
 export const metadata: Metadata = {
   title: "三好關卡",
   description:
-    "你寫台詞，AI 演爆點。用做好事、說好話、存好心與四給闖關。",
+    "築牌 Roguelike：用三好與四給卡牌澄清誤會，AI 煉卡師幫你長牌庫。",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

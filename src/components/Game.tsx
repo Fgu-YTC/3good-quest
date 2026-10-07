@@ -1,198 +1,231 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   EMPTY_FOUR_GIVES,
   EMPTY_SCORES,
   FOUR_GIVE_LABELS,
-  LEVEL_1,
-  SCORE_LABELS,
   type FourGiveKey,
   type ScoreKey,
 } from "@/data/level1";
-import type { DirectResult } from "@/lib/direct";
+import {
+  THREATS,
+  TYPE_LABELS,
+  calcDamage,
+  cloneStarterDeck,
+  shuffle,
+  type GameCard,
+} from "@/data/cards";
 import { ScoreBoard } from "@/components/ScoreBoard";
 import { FourGiveBoard } from "@/components/FourGiveBoard";
 
-type Phase = "title" | "compose" | "resolving" | "result" | "ending";
+type Phase = "title" | "battle" | "forge" | "victory" | "defeat";
 
-const STORAGE_KEY = "3good-quest-progress-v2";
+const ENERGY_MAX = 3;
+const HAND_SIZE = 5;
+const CHAOS_LIMIT = 5;
 
-const SEEDS = [
-  "當場補一句：這塊互動是我做的，流程阿澤整合。",
-  "先忍下來，發表後再私下把貢獻表貼群組。",
-  "微笑說我們一起做的，邀他明天一起分享。",
-  "陰陽一句「口誤講得好順」，然後滑手機。",
-];
+function drawCards(
+  deck: GameCard[],
+  discard: GameCard[],
+  n: number,
+): { hand: GameCard[]; deck: GameCard[]; discard: GameCard[] } {
+  let d = [...deck];
+  let disc = [...discard];
+  const hand: GameCard[] = [];
+  for (let i = 0; i < n; i++) {
+    if (d.length === 0) {
+      d = shuffle(disc);
+      disc = [];
+    }
+    const c = d.shift();
+    if (c) hand.push(c);
+  }
+  return { hand, deck: d, discard: disc };
+}
 
 export function Game() {
   const [phase, setPhase] = useState<Phase>("title");
-  const [stepIndex, setStepIndex] = useState(0);
+  const [wave, setWave] = useState(0);
+  const [deck, setDeck] = useState<GameCard[]>([]);
+  const [hand, setHand] = useState<GameCard[]>([]);
+  const [discard, setDiscard] = useState<GameCard[]>([]);
+  const [energy, setEnergy] = useState(ENERGY_MAX);
+  const [threatHp, setThreatHp] = useState(0);
+  const [chaos, setChaos] = useState(0);
   const [scores, setScores] = useState({ ...EMPTY_SCORES });
   const [gives, setGives] = useState({ ...EMPTY_FOUR_GIVES });
-  const [draft, setDraft] = useState("");
-  const [last, setLast] = useState<DirectResult | null>(null);
-  const [lastUnlocked, setLastUnlocked] = useState<FourGiveKey[]>([]);
-  const [actionLog, setActionLog] = useState<string[]>([]);
-  const [cleared, setCleared] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [degradedReason, setDegradedReason] = useState<string | null>(null);
-  const [highlight, setHighlight] = useState<string | null>(null);
+  const [playedThisWave, setPlayedThisWave] = useState<
+    { name: string; type: GameCard["type"] }[]
+  >([]);
+  const [log, setLog] = useState<string[]>([]);
+  const [offer, setOffer] = useState<GameCard | null>(null);
+  const [forgeHint, setForgeHint] = useState<string | null>(null);
+  const [forging, setForging] = useState(false);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const data = JSON.parse(raw) as { clearedLevel1?: boolean };
-        if (data.clearedLevel1) setCleared(true);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const step = LEVEL_1.steps[stepIndex];
-  const sceneText = useMemo(
-    () => `${LEVEL_1.title}。${LEVEL_1.hook} 目前：${step?.narrator ?? ""}`,
-    [step],
+  const threat = THREATS[wave] ?? THREATS[THREATS.length - 1]!;
+  const weakHint = useMemo(
+    () => threat.weakTo.map((t) => TYPE_LABELS[t]).join("／"),
+    [threat],
   );
 
-  const ending = useMemo(() => {
-    return (
-      LEVEL_1.endings.find((e) => e.when(scores, gives)) ??
-      LEVEL_1.endings.at(-1)!
-    );
-  }, [scores, gives]);
-
-  function startGame() {
+  function startRun() {
+    const starter = shuffle(cloneStarterDeck());
+    const drawn = drawCards(starter, [], HAND_SIZE);
+    setDeck(drawn.deck);
+    setHand(drawn.hand);
+    setDiscard(drawn.discard);
+    setWave(0);
+    setEnergy(ENERGY_MAX);
+    setThreatHp(THREATS[0]!.hp);
+    setChaos(0);
     setScores({ ...EMPTY_SCORES });
     setGives({ ...EMPTY_FOUR_GIVES });
-    setStepIndex(0);
-    setDraft("");
-    setLast(null);
-    setLastUnlocked([]);
-    setActionLog([]);
-    setError(null);
-    setDegradedReason(null);
-    setHighlight(null);
-    setPhase("compose");
+    setPlayedThisWave([]);
+    setLog(["新的一局：用卡牌澄清誤會，邊打邊築牌。"]);
+    setOffer(null);
+    setForgeHint(null);
+    setPhase("battle");
   }
 
-  async function submitAction() {
-    const text = draft.trim();
-    if (!text || !step) return;
-    setPhase("resolving");
-    setError(null);
-    setDegradedReason(null);
+  function pushLog(line: string) {
+    setLog((L) => [line, ...L].slice(0, 8));
+  }
+
+  function playCard(card: GameCard) {
+    if (phase !== "battle" || energy < card.cost) return;
+
+    const { damage, weak } = calcDamage(card, threat);
+    const nextHp = Math.max(0, threatHp - damage);
+    const nextPlayed = [
+      ...playedThisWave,
+      { name: card.name, type: card.type },
+    ];
+    const nextGives = card.fourGive
+      ? { ...gives, [card.fourGive]: true }
+      : gives;
+
+    setEnergy((e) => e - card.cost);
+    setHand((h) => h.filter((c) => c.id !== card.id));
+    setDiscard((d) => [...d, card]);
+    setThreatHp(nextHp);
+    setPlayedThisWave(nextPlayed);
+
+    if (card.type !== "give") {
+      setScores((s) => ({
+        ...s,
+        [card.type as ScoreKey]: s[card.type as ScoreKey] + 1,
+      }));
+    }
+    if (card.fourGive) {
+      setGives(nextGives);
+    }
+
+    pushLog(
+      `打出「${card.name}」澄清 ${damage}${weak ? "（剋屬＋1）" : ""}`,
+    );
+
+    if (nextHp <= 0) {
+      void beginForge(nextPlayed, nextGives);
+    }
+  }
+
+  function endTurn() {
+    if (phase !== "battle") return;
+    const nextChaos = chaos + 1;
+    setChaos(nextChaos);
+    pushLog(`回合結束：威脅蔓延，混亂 +1（${nextChaos}/${CHAOS_LIMIT}）`);
+
+    if (nextChaos >= CHAOS_LIMIT) {
+      setPhase("defeat");
+      return;
+    }
+
+    const drawn = drawCards(deck, [...discard, ...hand], HAND_SIZE);
+    setHand(drawn.hand);
+    setDeck(drawn.deck);
+    setDiscard(drawn.discard);
+    setEnergy(ENERGY_MAX);
+  }
+
+  async function beginForge(
+    played = playedThisWave,
+    giveState = gives,
+  ) {
+    setPhase("forge");
+    setForging(true);
+    setOffer(null);
+    setForgeHint(null);
+    pushLog(`清除「${threat.name}」！煉卡爐啟動…`);
 
     try {
-      const res = await fetch("/api/direct", {
+      const res = await fetch("/api/forge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          playerText: text,
-          scene: sceneText,
-          prompt: step.prompt,
-          choices: step.choices,
+          threat,
+          played,
+          wave: wave + 1,
+          unlockedGives: (Object.keys(giveState) as FourGiveKey[]).filter(
+            (k) => giveState[k],
+          ),
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "導演開天窗了，再試一次");
-        setPhase("compose");
-        return;
-      }
-
-      const result = data as DirectResult & { degraded?: boolean; reason?: string };
-      const newly = (result.fourGives ?? []).filter((k) => !gives[k]);
-
-      setScores((prev) => {
-        const next = { ...prev };
-        (Object.keys(result.deltas ?? {}) as ScoreKey[]).forEach((k) => {
-          next[k] += result.deltas[k] ?? 0;
-        });
-        return next;
-      });
-      if (result.fourGives?.length) {
-        setGives((prev) => {
-          const next = { ...prev };
-          for (const k of result.fourGives) next[k] = true;
-          return next;
-        });
-      }
-
-      setLastUnlocked(newly);
-      setLast(result);
-      setActionLog((log) => [...log, `「${text}」→ ${result.headline}`]);
-      if (result.degraded && result.reason) {
-        setDegradedReason(String(result.reason));
-      }
-      setPhase("result");
+      setOffer(data.card as GameCard);
+      if (data.degraded && data.reason) setForgeHint(String(data.reason));
     } catch {
-      setError("連線飄走了，再送一次");
-      setPhase("compose");
+      setForgeHint("煉卡連線失敗，給你一張應急卡");
+      setOffer({
+        id: `emergency-${Date.now()}`,
+        name: "應急好話",
+        cost: 1,
+        type: "speak",
+        power: 2,
+        text: "連線失敗時的備援牌。",
+        forged: true,
+      });
+    } finally {
+      setForging(false);
     }
   }
 
-  async function goEnding(
-    nextScores: Record<ScoreKey, number>,
-    nextGives: Record<FourGiveKey, boolean>,
-    log: string[],
-  ) {
-    const finalEnding =
-      LEVEL_1.endings.find((e) => e.when(nextScores, nextGives)) ??
-      LEVEL_1.endings.at(-1)!;
-    setPhase("ending");
-    setCleared(true);
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ clearedLevel1: true }),
-      );
-    } catch {
-      /* ignore */
+  function takeCard(yes: boolean) {
+    if (!offer) return;
+    let nextDeck = [...deck, ...hand, ...discard];
+    if (yes) {
+      nextDeck = [...nextDeck, { ...offer, id: `${offer.id}-owned` }];
+      pushLog(`築牌：將「${offer.name}」加入牌庫`);
+    } else {
+      pushLog(`你略過了「${offer.name}」`);
     }
 
-    const scoreLine = (Object.keys(SCORE_LABELS) as ScoreKey[])
-      .map((k) => `${SCORE_LABELS[k]}${nextScores[k]}`)
-      .join("、");
-    const giveLine = (Object.keys(FOUR_GIVE_LABELS) as FourGiveKey[])
-      .filter((k) => nextGives[k])
-      .map((k) => FOUR_GIVE_LABELS[k])
-      .join("、");
-    const summary = [
-      `結局：${finalEnding.title}`,
-      `三好：${scoreLine}`,
-      `四給：${giveLine || "尚未點亮"}`,
-      `玩家行動剪輯：${log.join(" / ")}`,
-      "請用導演口吻給 3～5 句個人化短評，不要 JSON。",
-    ].join("\n");
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "reflect", summary }),
-      });
-      const data = await res.json();
-      setHighlight(String(data.reply ?? finalEnding.blurb));
-    } catch {
-      setHighlight(finalEnding.blurb);
-    }
-  }
-
-  function continueAfterResult() {
-    if (stepIndex >= LEVEL_1.steps.length - 1) {
-      void goEnding(scores, gives, actionLog);
+    const nextWave = wave + 1;
+    if (nextWave >= THREATS.length) {
+      setDeck(nextDeck);
+      setHand([]);
+      setDiscard([]);
+      setPhase("victory");
       return;
     }
-    setStepIndex((i) => i + 1);
-    setDraft("");
-    setLast(null);
-    setLastUnlocked([]);
-    setDegradedReason(null);
-    setPhase("compose");
+
+    const reshuffled = shuffle(nextDeck);
+    const drawn = drawCards(reshuffled, [], HAND_SIZE);
+    setDeck(drawn.deck);
+    setHand(drawn.hand);
+    setDiscard(drawn.discard);
+    setWave(nextWave);
+    setThreatHp(THREATS[nextWave]!.hp);
+    setEnergy(ENERGY_MAX);
+    setPlayedThisWave([]);
+    setOffer(null);
+    setPhase("battle");
+    pushLog(`下一波：${THREATS[nextWave]!.name}`);
   }
+
+  const giveCount = (Object.keys(gives) as FourGiveKey[]).filter(
+    (k) => gives[k],
+  ).length;
 
   return (
     <div className="game-shell">
@@ -209,20 +242,21 @@ export function Game() {
       <main className="stage">
         {phase === "title" && (
           <section className="title-card enter">
-            <p className="eyebrow">你寫台詞 · AI 演爆點</p>
+            <p className="eyebrow">築牌 Roguelike · AI 煉卡</p>
             <h1>三好關卡</h1>
             <p className="lead">
-              不是跟 AI 聊天。你寫下當下要說的話／要做的事，AI 當「爆點導演」——生成現場後果、群組反應，並結算三好與四給。
+              用卡牌澄清誤會。打完一波，AI
+              煉師依你的出牌鍛造新卡——選進牌庫，越打牌組越長。
             </p>
             <ul className="feature-list">
               <li>
-                <strong>玩家創作</strong>：每一幕自己寫行動
+                <strong>戰鬥</strong>：花費專注打出做好事／說好話／存好心／四給
               </li>
               <li>
-                <strong>AI 導演</strong>：客製後果＋旁人吐槽氣泡
+                <strong>築牌</strong>：每清一波威脅，決定要不要納入新卡
               </li>
               <li>
-                <strong>分數系統</strong>：三好加減、四給收集、多結局
+                <strong>AI</strong>：煉卡師（不是聊天室）
               </li>
             </ul>
             <FourGiveBoard gives={EMPTY_FOUR_GIVES} />
@@ -230,131 +264,166 @@ export function Game() {
               <button
                 type="button"
                 className="primary-btn large"
-                onClick={startGame}
+                onClick={startRun}
               >
-                {cleared ? "再玩第一關" : "開始第一關"}
+                開始築牌
               </button>
             </div>
-            <p className="fine-print">免登入 · AI 是過關引擎（無 Key 走快速導演）</p>
-          </section>
-        )}
-
-        {(phase === "compose" || phase === "resolving") && step && (
-          <section className="play-card enter wide">
-            <p className="level-tag">
-              第一關 · 第 {stepIndex + 1}/{LEVEL_1.steps.length} 幕 · 寫下你的行動
+            <p className="fine-print">
+              {THREATS.length} 波威脅 · 混亂達 {CHAOS_LIMIT} 失敗 · MIT 開源
             </p>
-            {stepIndex === 0 && <p className="hook">{LEVEL_1.hook}</p>}
-            <p className="narrator">{step.narrator}</p>
-            <h2 className="prompt">{step.prompt}</h2>
-
-            <label className="compose-label" htmlFor="action-draft">
-              你會說／做什麼？（AI 會依這段演後果）
-            </label>
-            <textarea
-              id="action-draft"
-              className="compose-box"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              maxLength={200}
-              rows={4}
-              placeholder="例如：我微笑說這塊我們一起做……"
-              disabled={phase === "resolving"}
-            />
-            <div className="compose-meta">
-              <span>{draft.trim().length}/200</span>
-              {error && <span className="compose-error">{error}</span>}
-            </div>
-
-            <div className="quick-row">
-              {SEEDS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className="chip"
-                  disabled={phase === "resolving"}
-                  onClick={() => setDraft(s)}
-                >
-                  靈感：{s.slice(0, 10)}…
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className="primary-btn large"
-              style={{ marginTop: "1rem" }}
-              disabled={phase === "resolving" || !draft.trim()}
-              onClick={() => void submitAction()}
-            >
-              {phase === "resolving" ? "導演開拍中…" : "讓 AI 導演開拍"}
-            </button>
           </section>
         )}
 
-        {phase === "result" && last && (
-          <section className="play-card enter wide">
-            <p className="level-tag">爆點 · {last.headline}</p>
-            <p className="narrator">{last.result}</p>
-
-            <div className="group-chat" aria-label="現場與群組反應">
-              {last.groupChat.map((b, i) => (
-                <div key={`${b.name}-${i}`} className="chat-row">
-                  <span className="chat-name">{b.name}</span>
-                  <span className="chat-text">{b.text}</span>
+        {(phase === "battle" || phase === "forge") && (
+          <section className="play-card enter wide card-table">
+            <div className="battle-top">
+              <div>
+                <p className="level-tag">
+                  第 {wave + 1}/{THREATS.length} 波 · {threat.name}
+                </p>
+                <p className="narrator">{threat.flavor}</p>
+                <p className="weak-line">弱點傾向：{weakHint}</p>
+              </div>
+              <div className="meters">
+                <div className="meter">
+                  <span>威脅</span>
+                  <strong>
+                    {Math.max(0, threatHp)}/{threat.hp}
+                  </strong>
+                  <div className="meter-bar">
+                    <i
+                      style={{
+                        width: `${Math.max(0, (threatHp / threat.hp) * 100)}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-              ))}
+                <div className="meter chaos">
+                  <span>混亂</span>
+                  <strong>
+                    {chaos}/{CHAOS_LIMIT}
+                  </strong>
+                </div>
+                <div className="meter">
+                  <span>專注</span>
+                  <strong>
+                    {energy}/{ENERGY_MAX}
+                  </strong>
+                </div>
+              </div>
             </div>
 
-            <p className="verdict">導演：{last.verdict}</p>
+            <p className="deck-meta">
+              牌庫 {deck.length} · 手牌 {hand.length} · 棄牌 {discard.length} ·
+              四給 {giveCount}/4
+            </p>
 
-            <div className="delta-row">
-              {(Object.entries(last.deltas) as [ScoreKey, number][]).map(
-                ([k, v]) =>
-                  v !== 0 && (
-                    <span
-                      key={k}
-                      className={`delta ${v > 0 ? "up" : "down"}`}
-                    >
-                      {SCORE_LABELS[k]} {v > 0 ? `+${v}` : v}
-                    </span>
-                  ),
-              )}
-              {lastUnlocked.map((key) => (
-                <span key={key} className="delta give">
-                  解鎖四給 · {FOUR_GIVE_LABELS[key]}
-                </span>
-              ))}
-            </div>
-            {degradedReason && (
-              <p className="mentor-hint">{degradedReason}</p>
+            {phase === "battle" && (
+              <>
+                <div className="hand-row">
+                  {hand.map((card) => {
+                    const afford = energy >= card.cost;
+                    const { damage, weak } = calcDamage(card, threat);
+                    return (
+                      <button
+                        key={card.id}
+                        type="button"
+                        className={`card-tile type-${card.type} ${afford ? "" : "disabled"}`}
+                        disabled={!afford}
+                        onClick={() => playCard(card)}
+                      >
+                        <div className="card-cost">{card.cost}</div>
+                        <div className="card-name">{card.name}</div>
+                        <div className="card-type">
+                          {TYPE_LABELS[card.type]}
+                        </div>
+                        <div className="card-text">{card.text}</div>
+                        <div className="card-power">
+                          澄清 {damage}
+                          {weak ? " ★" : ""}
+                        </div>
+                        {card.forged && (
+                          <span className="forge-tag">鍛造</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="cta-row">
+                  <button type="button" className="ghost-btn" onClick={endTurn}>
+                    結束回合
+                  </button>
+                </div>
+              </>
             )}
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={continueAfterResult}
-            >
-              繼續
-            </button>
+
+            {phase === "forge" && (
+              <div className="forge-panel">
+                <p className="counsel-label">AI 煉卡師</p>
+                {forging && <p className="narrator">爐火正旺，卡片成形中…</p>}
+                {!forging && offer && (
+                  <>
+                    <div className={`card-tile large type-${offer.type}`}>
+                      <div className="card-cost">{offer.cost}</div>
+                      <div className="card-name">{offer.name}</div>
+                      <div className="card-type">
+                        {TYPE_LABELS[offer.type]}
+                      </div>
+                      <div className="card-text">{offer.text}</div>
+                      <div className="card-power">澄清 {offer.power}</div>
+                      {offer.fourGive && (
+                        <div className="card-give">
+                          {FOUR_GIVE_LABELS[offer.fourGive]}
+                        </div>
+                      )}
+                      <span className="forge-tag">新卡</span>
+                    </div>
+                    {forgeHint && <p className="mentor-hint">{forgeHint}</p>}
+                    <div className="cta-row">
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        onClick={() => takeCard(true)}
+                      >
+                        加入牌庫
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => takeCard(false)}
+                      >
+                        略過
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            <ul className="battle-log">
+              {log.map((line, i) => (
+                <li key={`${line}-${i}`}>{line}</li>
+              ))}
+            </ul>
           </section>
         )}
 
-        {phase === "ending" && (
+        {phase === "victory" && (
           <section className="play-card enter ending">
             <p className="level-tag">通關</p>
-            <h2>{ending.title}</h2>
-            <p className="narrator">{ending.blurb}</p>
+            <h2>牌庫長成你的樣子</h2>
+            <p className="narrator">
+              你清完所有威脅。最終牌庫 {deck.length}{" "}
+              張——每一張鍛造卡都是這局的足跡。
+            </p>
             <ScoreBoard scores={scores} gives={gives} />
             <div style={{ marginTop: "1rem" }}>
               <FourGiveBoard gives={gives} />
             </div>
-            <div className="reflect-box">
-              <p className="counsel-label">導演剪輯短評（AI）</p>
-              <p className="narrator">{highlight ?? "剪輯中…"}</p>
-            </div>
             <div className="cta-row">
-              <button type="button" className="primary-btn" onClick={startGame}>
-                重玩本關
+              <button type="button" className="primary-btn" onClick={startRun}>
+                再築一局
               </button>
               <button
                 type="button"
@@ -362,6 +431,21 @@ export function Game() {
                 onClick={() => setPhase("title")}
               >
                 回標題
+              </button>
+            </div>
+          </section>
+        )}
+
+        {phase === "defeat" && (
+          <section className="play-card enter ending">
+            <p className="level-tag">失敗</p>
+            <h2>混亂爆炸了</h2>
+            <p className="narrator">
+              威脅蔓延太久。下次試著對弱點出牌，或更積極結束威脅再煉卡。
+            </p>
+            <div className="cta-row">
+              <button type="button" className="primary-btn" onClick={startRun}>
+                重來
               </button>
             </div>
           </section>

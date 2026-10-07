@@ -335,6 +335,212 @@ input {
   line-height: 1.5;
 }
 
+.card-table {
+  width: min(100%, 860px);
+}
+
+.battle-top {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .battle-top {
+    grid-template-columns: 1fr;
+  }
+}
+
+.weak-line {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.meters {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.meter {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.45rem 0.65rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.6rem;
+  align-items: center;
+}
+
+.meter span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.meter strong {
+  justify-self: end;
+}
+
+.meter-bar {
+  grid-column: 1 / -1;
+  height: 0.4rem;
+  background: #e5ece8;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.meter-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent-2);
+}
+
+.meter.chaos strong {
+  color: #b42318;
+}
+
+.deck-meta {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.hand-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.card-tile {
+  position: relative;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.75rem 0.7rem 0.65rem;
+  background: white;
+  min-height: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(20, 40, 30, 0.06);
+}
+
+.card-tile:hover:not(.disabled) {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+}
+
+.card-tile.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.card-tile.large {
+  max-width: 220px;
+  min-height: 200px;
+  cursor: default;
+}
+
+.card-tile.type-do {
+  background: linear-gradient(180deg, #f3fffb, #fff);
+}
+
+.card-tile.type-speak {
+  background: linear-gradient(180deg, #fff9ec, #fff);
+}
+
+.card-tile.type-heart {
+  background: linear-gradient(180deg, #fff1ec, #fff);
+}
+
+.card-tile.type-give {
+  background: linear-gradient(180deg, #f3f0ff, #fff);
+}
+
+.card-cost {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.card-name {
+  font-weight: 700;
+  font-size: 1rem;
+  padding-right: 1.4rem;
+}
+
+.card-type {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.card-text {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.card-power {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.card-give {
+  font-size: 0.75rem;
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+.forge-tag {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.45rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: var(--accent-2);
+  color: white;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+}
+
+.forge-panel {
+  padding: 0.75rem 0 0.25rem;
+}
+
+.battle-log {
+  margin: 1rem 0 0;
+  padding: 0.65rem 0.85rem;
+  list-style: none;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  max-height: 120px;
+  overflow: auto;
+}
+
+.battle-log li {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.45;
+  padding: 0.15rem 0;
+}
+
 .counsel-banner {
   margin: 0 0 1rem;
   padding: 0.85rem 1rem;
