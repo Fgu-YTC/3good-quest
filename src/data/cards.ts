@@ -18,6 +18,9 @@ export type Threat = {
   name: string;
   hp: number;
   flavor: string;
+  /** 戰場用短標籤，少敘事 */
+  tag: string;
+  icon: string;
   weakTo: CardType[];
 };
 
@@ -35,39 +38,39 @@ export const STARTER_DECK: GameCard[] = [
     cost: 0,
     type: "heart",
     power: 1,
-    text: "先把火壓住。造成 1 點澄清。",
+    text: "澄清 1",
   },
   {
     id: "s2",
-    name: "說清楚事實",
+    name: "講清楚",
     cost: 1,
     type: "speak",
     power: 2,
-    text: "不陰陽，只講發生什麼。造成 2 點澄清。",
+    text: "澄清 2",
   },
   {
     id: "s3",
-    name: "補一刀善意",
+    name: "補上缺口",
     cost: 1,
     type: "do",
     power: 2,
-    text: "動手把事情補上。造成 2 點澄清。",
+    text: "澄清 2",
   },
   {
     id: "s4",
-    name: "先假設無惡意",
+    name: "先不惡意",
     cost: 1,
     type: "heart",
     power: 2,
-    text: "給彼此一個台階下。造成 2 點澄清。",
+    text: "澄清 2",
   },
   {
     id: "s5",
-    name: "給人方便清單",
+    name: "方便清單",
     cost: 2,
     type: "give",
     power: 3,
-    text: "把待辦整理好丟出去。造成 3 點澄清，點亮「給人方便」。",
+    text: "澄清 3 · 方便",
     fourGive: "convenience",
   },
   {
@@ -76,7 +79,7 @@ export const STARTER_DECK: GameCard[] = [
     cost: 2,
     type: "give",
     power: 3,
-    text: "把舞台變大。造成 3 點澄清，點亮「給人歡喜」。",
+    text: "澄清 3 · 歡喜",
     fourGive: "joy",
   },
   {
@@ -85,15 +88,15 @@ export const STARTER_DECK: GameCard[] = [
     cost: 1,
     type: "speak",
     power: 2,
-    text: "講界線，但不放火。造成 2 點澄清。",
+    text: "澄清 2",
   },
   {
     id: "s8",
-    name: "下一步希望",
+    name: "下一步",
     cost: 2,
     type: "give",
     power: 3,
-    text: "給出可執行的一小步。造成 3 點澄清，點亮「給人希望」。",
+    text: "澄清 3 · 希望",
     fourGive: "hope",
   },
 ];
@@ -103,28 +106,36 @@ export const THREATS: Threat[] = [
     id: "t1",
     name: "搶功風波",
     hp: 8,
-    flavor: "台上有人把你的成果講成自己的。澄清值清掉它！",
+    flavor: "成果被講成別人的",
+    tag: "WAVE 1",
+    icon: "搶",
     weakTo: ["speak", "do"],
   },
   {
     id: "t2",
     name: "群組洗版",
     hp: 10,
-    flavor: "截圖與留言開始分裂成兩派。快把火勢壓下去。",
+    flavor: "留言分裂成兩派",
+    tag: "WAVE 2",
+    icon: "洗",
     weakTo: ["speak", "heart"],
   },
   {
     id: "t3",
     name: "陰陽冷戰",
     hp: 12,
-    flavor: "沒人撕破臉，但空氣重到能滴水。需要真心與四給。",
+    flavor: "沒撕破臉但很重",
+    tag: "WAVE 3",
+    icon: "冷",
     weakTo: ["heart", "give"],
   },
   {
     id: "t4",
-    name: "最終誤會怪",
+    name: "誤會巨獸",
     hp: 14,
-    flavor: "所有餘波凝成一隻大誤會。用你築好的牌庫收尾！",
+    flavor: "Boss",
+    tag: "BOSS",
+    icon: "誤",
     weakTo: ["do", "give", "speak"],
   },
 ];
