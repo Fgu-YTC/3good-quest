@@ -98,11 +98,105 @@ input {
   font-size: 1.1rem;
 }
 
+.hud-boards {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+  max-width: min(100%, 420px);
+}
+
 .score-board {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
   justify-content: flex-end;
+}
+
+.four-give-board {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.65rem 0.75rem;
+}
+
+.four-give-board.compact {
+  padding: 0.45rem 0.55rem;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.four-give-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.4rem;
+}
+
+.four-give-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--accent-2);
+}
+
+.four-give-count {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.four-give-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.four-give-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  border-radius: 12px;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  background: #faf8f4;
+  min-height: 2.4rem;
+}
+
+.four-give-board.compact .four-give-chip {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 0;
+  padding: 0.25rem 0.4rem;
+}
+
+.four-give-chip.on {
+  background: #fff3e8;
+  border-color: rgba(224, 107, 75, 0.35);
+}
+
+.four-give-chip.off {
+  opacity: 0.55;
+}
+
+.four-give-mark {
+  font-weight: 700;
+  color: var(--accent-2);
+  font-size: 0.8rem;
+}
+
+.four-give-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.four-give-blurb {
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.four-give-board.compact .four-give-blurb {
+  display: none;
 }
 
 .score-pill {
