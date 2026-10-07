@@ -224,7 +224,7 @@ input {
 .stage {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 1rem 1.25rem 7.5rem;
   max-width: 920px;
@@ -241,6 +241,90 @@ input {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 1.75rem 1.5rem 1.5rem;
+}
+
+.play-card.wide {
+  width: min(100%, 720px);
+}
+
+.feature-list {
+  margin: 0 0 1.25rem;
+  padding-left: 1.15rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.feature-list strong {
+  color: var(--ink);
+}
+
+.ai-gate {
+  margin: 0 0 0.85rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 14px;
+  background: #e8f4ef;
+  border: 1px solid rgba(15, 122, 95, 0.2);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.counsel-banner {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: #fff3e8;
+  border: 1px solid rgba(224, 107, 75, 0.25);
+}
+
+.counsel-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-2);
+  letter-spacing: 0.04em;
+}
+
+.counsel-why {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.choice-btn.recommended {
+  border-color: var(--accent-2);
+  background: #fff8f3;
+  box-shadow: 0 0 0 1px rgba(224, 107, 75, 0.2);
+}
+
+.rec-badge {
+  display: inline-block;
+  margin-right: 0.45rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--accent-2);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.reflect-box {
+  margin: 1rem 0 1.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: #eef4f0;
+  border: 1px solid var(--line);
+}
+
+.mentor-embedded {
+  margin-top: 0.25rem;
+}
+
+.mentor-panel.embedded {
+  position: relative;
+  max-height: 360px;
+  box-shadow: none;
 }
 
 .enter {
