@@ -1,7 +1,9 @@
 {
   "name": "3good-quest",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "license": "MIT",
+  "description": "三好關卡：好玩優先的情境選擇遊戲，含可對話夥伴小好",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
