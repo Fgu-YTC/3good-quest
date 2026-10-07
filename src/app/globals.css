@@ -258,14 +258,79 @@ input {
   color: var(--ink);
 }
 
-.ai-gate {
-  margin: 0 0 0.85rem;
-  padding: 0.7rem 0.85rem;
-  border-radius: 14px;
-  background: #e8f4ef;
-  border: 1px solid rgba(15, 122, 95, 0.2);
-  color: var(--accent);
+.compose-label {
+  display: block;
+  margin: 0.25rem 0 0.45rem;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.compose-box {
+  width: 100%;
+  resize: vertical;
+  min-height: 7rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  background: white;
+  color: var(--ink);
+  line-height: 1.6;
+  outline: none;
+}
+
+.compose-box:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 122, 95, 0.12);
+}
+
+.compose-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.compose-error {
+  color: #b42318;
   font-weight: 600;
+}
+
+.group-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0 0 0.85rem;
+  padding: 0.75rem;
+  border-radius: 16px;
+  background: #1c2b24;
+  color: #f3f7f2;
+}
+
+.chat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.chat-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #9ad7c3;
+}
+
+.chat-text {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.verdict {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
   font-size: 0.92rem;
   line-height: 1.5;
 }

@@ -17,7 +17,7 @@ const display = ZCOOL_XiaoWei({
 export const metadata: Metadata = {
   title: "三好關卡",
   description:
-    "好玩優先的情境選擇遊戲：跟小好聊聊，用做好事、說好話、存好心闖關。",
+    "你寫台詞，AI 演爆點。用做好事、說好話、存好心與四給闖關。",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -7,30 +7,37 @@ import {
   FOUR_GIVE_LABELS,
   LEVEL_1,
   SCORE_LABELS,
-  type Choice,
   type FourGiveKey,
   type ScoreKey,
 } from "@/data/level1";
-import { MentorChat, type CounselResult } from "@/components/MentorChat";
+import type { DirectResult } from "@/lib/direct";
 import { ScoreBoard } from "@/components/ScoreBoard";
 import { FourGiveBoard } from "@/components/FourGiveBoard";
 
-type Phase = "title" | "consult" | "act" | "result-flash" | "ending";
+type Phase = "title" | "compose" | "resolving" | "result" | "ending";
 
-const STORAGE_KEY = "3good-quest-progress-v1";
+const STORAGE_KEY = "3good-quest-progress-v2";
+
+const SEEDS = [
+  "當場補一句：這塊互動是我做的，流程阿澤整合。",
+  "先忍下來，發表後再私下把貢獻表貼群組。",
+  "微笑說我們一起做的，邀他明天一起分享。",
+  "陰陽一句「口誤講得好順」，然後滑手機。",
+];
 
 export function Game() {
   const [phase, setPhase] = useState<Phase>("title");
   const [stepIndex, setStepIndex] = useState(0);
   const [scores, setScores] = useState({ ...EMPTY_SCORES });
   const [gives, setGives] = useState({ ...EMPTY_FOUR_GIVES });
-  const [lastChoice, setLastChoice] = useState<Choice | null>(null);
+  const [draft, setDraft] = useState("");
+  const [last, setLast] = useState<DirectResult | null>(null);
   const [lastUnlocked, setLastUnlocked] = useState<FourGiveKey[]>([]);
+  const [actionLog, setActionLog] = useState<string[]>([]);
   const [cleared, setCleared] = useState(false);
-  const [counsel, setCounsel] = useState<CounselResult | null>(null);
-  const [choiceLog, setChoiceLog] = useState<string[]>([]);
-  const [aiReflect, setAiReflect] = useState<string | null>(null);
-  const [reflectLoading, setReflectLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [degradedReason, setDegradedReason] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -61,57 +68,91 @@ export function Game() {
     setScores({ ...EMPTY_SCORES });
     setGives({ ...EMPTY_FOUR_GIVES });
     setStepIndex(0);
-    setLastChoice(null);
+    setDraft("");
+    setLast(null);
     setLastUnlocked([]);
-    setCounsel(null);
-    setChoiceLog([]);
-    setAiReflect(null);
-    setPhase("consult");
+    setActionLog([]);
+    setError(null);
+    setDegradedReason(null);
+    setHighlight(null);
+    setPhase("compose");
   }
 
-  function onCounseled(result: CounselResult) {
-    setCounsel(result);
-    setPhase("act");
-  }
+  async function submitAction() {
+    const text = draft.trim();
+    if (!text || !step) return;
+    setPhase("resolving");
+    setError(null);
+    setDegradedReason(null);
 
-  function pick(choice: Choice) {
-    setScores((prev) => {
-      const next = { ...prev };
-      (Object.keys(choice.deltas) as ScoreKey[]).forEach((k) => {
-        next[k] += choice.deltas[k] ?? 0;
+    try {
+      const res = await fetch("/api/direct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playerText: text,
+          scene: sceneText,
+          prompt: step.prompt,
+          choices: step.choices,
+        }),
       });
-      return next;
-    });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "導演開天窗了，再試一次");
+        setPhase("compose");
+        return;
+      }
 
-    const newly = (choice.fourGives ?? []).filter((key) => !gives[key]);
-    if (choice.fourGives?.length) {
-      setGives((prev) => {
+      const result = data as DirectResult & { degraded?: boolean; reason?: string };
+      const newly = (result.fourGives ?? []).filter((k) => !gives[k]);
+
+      setScores((prev) => {
         const next = { ...prev };
-        for (const key of choice.fourGives!) next[key] = true;
+        (Object.keys(result.deltas ?? {}) as ScoreKey[]).forEach((k) => {
+          next[k] += result.deltas[k] ?? 0;
+        });
         return next;
       });
+      if (result.fourGives?.length) {
+        setGives((prev) => {
+          const next = { ...prev };
+          for (const k of result.fourGives) next[k] = true;
+          return next;
+        });
+      }
+
+      setLastUnlocked(newly);
+      setLast(result);
+      setActionLog((log) => [...log, `「${text}」→ ${result.headline}`]);
+      if (result.degraded && result.reason) {
+        setDegradedReason(String(result.reason));
+      }
+      setPhase("result");
+    } catch {
+      setError("連線飄走了，再送一次");
+      setPhase("compose");
     }
-
-    const followed =
-      counsel?.recommendId === choice.id ? "（採納小好建議）" : "（走自己的路）";
-    setChoiceLog((log) => [
-      ...log,
-      `第${stepIndex + 1}步：${choice.label}${followed}`,
-    ]);
-
-    setLastUnlocked(newly);
-    setLastChoice(choice);
-    setPhase("result-flash");
   }
 
-  async function fetchReflect(
+  async function goEnding(
     nextScores: Record<ScoreKey, number>,
     nextGives: Record<FourGiveKey, boolean>,
     log: string[],
-    endingTitle: string,
   ) {
-    setReflectLoading(true);
-    setAiReflect(null);
+    const finalEnding =
+      LEVEL_1.endings.find((e) => e.when(nextScores, nextGives)) ??
+      LEVEL_1.endings.at(-1)!;
+    setPhase("ending");
+    setCleared(true);
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ clearedLevel1: true }),
+      );
+    } catch {
+      /* ignore */
+    }
+
     const scoreLine = (Object.keys(SCORE_LABELS) as ScoreKey[])
       .map((k) => `${SCORE_LABELS[k]}${nextScores[k]}`)
       .join("、");
@@ -120,10 +161,11 @@ export function Game() {
       .map((k) => FOUR_GIVE_LABELS[k])
       .join("、");
     const summary = [
-      `結局：${endingTitle}`,
+      `結局：${finalEnding.title}`,
       `三好：${scoreLine}`,
       `四給：${giveLine || "尚未點亮"}`,
-      `選擇：${log.join(" / ")}`,
+      `玩家行動剪輯：${log.join(" / ")}`,
+      "請用導演口吻給 3～5 句個人化短評，不要 JSON。",
     ].join("\n");
 
     try {
@@ -133,37 +175,23 @@ export function Game() {
         body: JSON.stringify({ mode: "reflect", summary }),
       });
       const data = await res.json();
-      setAiReflect(String(data.reply ?? "這關辛苦了。"));
+      setHighlight(String(data.reply ?? finalEnding.blurb));
     } catch {
-      setAiReflect("這關你有走完，很重要。下次再找小好當軍師吧。");
-    } finally {
-      setReflectLoading(false);
+      setHighlight(finalEnding.blurb);
     }
   }
 
-  function continueAfterFlash() {
+  function continueAfterResult() {
     if (stepIndex >= LEVEL_1.steps.length - 1) {
-      const finalEnding =
-        LEVEL_1.endings.find((e) => e.when(scores, gives)) ??
-        LEVEL_1.endings.at(-1)!;
-      setPhase("ending");
-      setCleared(true);
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ clearedLevel1: true }),
-        );
-      } catch {
-        /* ignore */
-      }
-      void fetchReflect(scores, gives, choiceLog, finalEnding.title);
+      void goEnding(scores, gives, actionLog);
       return;
     }
     setStepIndex((i) => i + 1);
-    setLastChoice(null);
+    setDraft("");
+    setLast(null);
     setLastUnlocked([]);
-    setCounsel(null);
-    setPhase("consult");
+    setDegradedReason(null);
+    setPhase("compose");
   }
 
   return (
@@ -181,20 +209,20 @@ export function Game() {
       <main className="stage">
         {phase === "title" && (
           <section className="title-card enter">
-            <p className="eyebrow">AI 軍師主線 · 三好計分 · 四給收集</p>
+            <p className="eyebrow">你寫台詞 · AI 演爆點</p>
             <h1>三好關卡</h1>
             <p className="lead">
-              每一幕都要先跟 AI 夥伴「小好」請示，聽完建議才解鎖行動。你的選擇改寫三好分數與四給；通關時小好還會給個人化短評。
+              不是跟 AI 聊天。你寫下當下要說的話／要做的事，AI 當「爆點導演」——生成現場後果、群組反應，並結算三好與四給。
             </p>
             <ul className="feature-list">
               <li>
-                <strong>請示小好</strong>：說出直覺，取得軍師建議與推薦行動
+                <strong>玩家創作</strong>：每一幕自己寫行動
               </li>
               <li>
-                <strong>做出選擇</strong>：可採納建議，也可故意走自己的路
+                <strong>AI 導演</strong>：客製後果＋旁人吐槽氣泡
               </li>
               <li>
-                <strong>結算短評</strong>：AI 依你本關表現說一句公道話
+                <strong>分數系統</strong>：三好加減、四給收集、多結局
               </li>
             </ul>
             <FourGiveBoard gives={EMPTY_FOUR_GIVES} />
@@ -207,93 +235,81 @@ export function Game() {
                 {cleared ? "再玩第一關" : "開始第一關"}
               </button>
             </div>
-            <p className="fine-print">
-              免登入 · AI 為過關必要步驟（無 Key 時走內建軍師）
-            </p>
+            <p className="fine-print">免登入 · AI 是過關引擎（無 Key 走快速導演）</p>
           </section>
         )}
 
-        {(phase === "consult" || phase === "act") && step && (
+        {(phase === "compose" || phase === "resolving") && step && (
           <section className="play-card enter wide">
             <p className="level-tag">
-              第一關 · 第 {stepIndex + 1}/{LEVEL_1.steps.length} 幕 ·{" "}
-              {phase === "consult" ? "請示小好" : "選擇行動"}
+              第一關 · 第 {stepIndex + 1}/{LEVEL_1.steps.length} 幕 · 寫下你的行動
             </p>
-            {stepIndex === 0 && phase === "consult" && (
-              <p className="hook">{LEVEL_1.hook}</p>
-            )}
+            {stepIndex === 0 && <p className="hook">{LEVEL_1.hook}</p>}
             <p className="narrator">{step.narrator}</p>
             <h2 className="prompt">{step.prompt}</h2>
 
-            {phase === "consult" && (
-              <>
-                <p className="ai-gate">
-                  行動選項已鎖定——先跟小好說一句你的想法，取得軍師建議後才會解鎖。
-                </p>
-                <MentorChat
-                  embedded
-                  mode="counsel"
-                  scene={sceneText}
-                  choices={step.choices.map((c) => ({
-                    id: c.id,
-                    label: c.label,
-                  }))}
-                  resetKey={`${LEVEL_1.id}-${step.id}`}
-                  onCounseled={onCounseled}
-                  subtitle="AI 軍師 · 必要步驟"
-                />
-              </>
-            )}
+            <label className="compose-label" htmlFor="action-draft">
+              你會說／做什麼？（AI 會依這段演後果）
+            </label>
+            <textarea
+              id="action-draft"
+              className="compose-box"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              maxLength={200}
+              rows={4}
+              placeholder="例如：我微笑說這塊我們一起做……"
+              disabled={phase === "resolving"}
+            />
+            <div className="compose-meta">
+              <span>{draft.trim().length}/200</span>
+              {error && <span className="compose-error">{error}</span>}
+            </div>
 
-            {phase === "act" && counsel && (
-              <>
-                <div className="counsel-banner">
-                  <p className="counsel-label">小好推薦</p>
-                  <p className="counsel-why">{counsel.why}</p>
-                  {counsel.degraded && (
-                    <p className="mentor-hint">目前為快速軍師模式</p>
-                  )}
-                </div>
-                <div className="choices">
-                  {step.choices.map((c) => {
-                    const recommended = c.id === counsel.recommendId;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className={`choice-btn ${recommended ? "recommended" : ""}`}
-                        onClick={() => pick(c)}
-                      >
-                        {recommended && (
-                          <span className="rec-badge">小好推</span>
-                        )}
-                        {c.label}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div className="quick-row">
+              {SEEDS.map((s) => (
                 <button
+                  key={s}
                   type="button"
-                  className="ghost-btn"
-                  style={{ marginTop: "0.75rem" }}
-                  onClick={() => {
-                    setCounsel(null);
-                    setPhase("consult");
-                  }}
+                  className="chip"
+                  disabled={phase === "resolving"}
+                  onClick={() => setDraft(s)}
                 >
-                  再問小好一次
+                  靈感：{s.slice(0, 10)}…
                 </button>
-              </>
-            )}
+              ))}
+            </div>
+
+            <button
+              type="button"
+              className="primary-btn large"
+              style={{ marginTop: "1rem" }}
+              disabled={phase === "resolving" || !draft.trim()}
+              onClick={() => void submitAction()}
+            >
+              {phase === "resolving" ? "導演開拍中…" : "讓 AI 導演開拍"}
+            </button>
           </section>
         )}
 
-        {phase === "result-flash" && lastChoice && (
-          <section className="play-card enter flash">
-            <p className="level-tag">結果</p>
-            <p className="narrator">{lastChoice.result}</p>
+        {phase === "result" && last && (
+          <section className="play-card enter wide">
+            <p className="level-tag">爆點 · {last.headline}</p>
+            <p className="narrator">{last.result}</p>
+
+            <div className="group-chat" aria-label="現場與群組反應">
+              {last.groupChat.map((b, i) => (
+                <div key={`${b.name}-${i}`} className="chat-row">
+                  <span className="chat-name">{b.name}</span>
+                  <span className="chat-text">{b.text}</span>
+                </div>
+              ))}
+            </div>
+
+            <p className="verdict">導演：{last.verdict}</p>
+
             <div className="delta-row">
-              {(Object.entries(lastChoice.deltas) as [ScoreKey, number][]).map(
+              {(Object.entries(last.deltas) as [ScoreKey, number][]).map(
                 ([k, v]) =>
                   v !== 0 && (
                     <span
@@ -309,16 +325,14 @@ export function Game() {
                   解鎖四給 · {FOUR_GIVE_LABELS[key]}
                 </span>
               ))}
-              {counsel?.recommendId === lastChoice.id ? (
-                <span className="delta up">採納 AI 建議</span>
-              ) : (
-                <span className="delta">自走路線</span>
-              )}
             </div>
+            {degradedReason && (
+              <p className="mentor-hint">{degradedReason}</p>
+            )}
             <button
               type="button"
               className="primary-btn"
-              onClick={continueAfterFlash}
+              onClick={continueAfterResult}
             >
               繼續
             </button>
@@ -335,12 +349,8 @@ export function Game() {
               <FourGiveBoard gives={gives} />
             </div>
             <div className="reflect-box">
-              <p className="counsel-label">小好的結算短評（AI）</p>
-              <p className="narrator">
-                {reflectLoading
-                  ? "小好正在回看你這一關…"
-                  : (aiReflect ?? "…")}
-              </p>
+              <p className="counsel-label">導演剪輯短評（AI）</p>
+              <p className="narrator">{highlight ?? "剪輯中…"}</p>
             </div>
             <div className="cta-row">
               <button type="button" className="primary-btn" onClick={startGame}>
@@ -354,20 +364,9 @@ export function Game() {
                 回標題
               </button>
             </div>
-            <p className="fine-print">
-              挑戰：採納或反抗小好建議，都能玩出不同結局；四給全開另有彩蛋結局。
-            </p>
           </section>
         )}
       </main>
-
-      {phase !== "title" && phase !== "consult" && (
-        <MentorChat
-          scene={sceneText}
-          mode="chat"
-          subtitle="閒聊加開 · 不影響進度"
-        />
-      )}
     </div>
   );
 }
